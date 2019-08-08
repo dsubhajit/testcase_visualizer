@@ -1,0 +1,550 @@
+<!-- 
+   Name: Testcase Status report
+   Author: Subhajit Dey
+   Date: 02-07-2019
+-->
+<!DOCTYPE html>
+<html>
+   <head>
+      <link href = "https://cdnjs.cloudflare.com/ajax/libs/extjs/6.2.0/classic/theme-classic/resources/theme-classic-all.css" rel = "stylesheet" />
+      <link href="style.css?v=1.2" rel="stylesheet" type="text/css"  />
+      <script type = "text/javascript" src = "https://cdnjs.cloudflare.com/ajax/libs/extjs/6.2.0/ext-all.js"></script>
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@2.8.0/dist/Chart.min.css">
+      <script src="https://code.jquery.com/jquery-3.4.1.min.js"  integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+      <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0/dist/Chart.min.js" ></script>
+      
+      <script type = "text/javascript">
+         var data = [];
+         var treedata = {
+            text: '.',
+            children: [{
+               text:'Available Releases',
+               expanded: true,
+               children:[]
+            }]
+         };
+
+         var active_release = "";
+         var detailEl;
+         var testcase_data = [];
+         var k ;
+         $(document).ready(function(){
+            $.ajax({
+               url: "data.json", 
+               cache: false,
+               success: function(result){
+                  data = result;
+                  k = result;
+                  for (var tc in result){                     
+                     for (var tc_name in result[tc].tc){
+                        if(testcase_data.indexOf(tc_name) === -1){
+                           testcase_data.push(tc_name);
+                        }
+                     }
+                  }
+
+                  testcase_data = testcase_data.sort();
+
+                  for(var r in result){
+                     console.log(r);
+                     treedata.children[0].children.push({ 
+                        text:r,
+                        id:r,
+                        leaf:true 
+                     });
+                  }
+
+                  loadExtJs();
+                  
+               }
+            });      
+         });
+
+         var config = {
+            type: 'pie',
+            data: {
+               datasets: [{
+                  data: [
+                    80,20
+                  ],
+                  backgroundColor: [
+                     'rgb(255, 99, 132)',
+                     'rgb(75, 192, 192)'                     
+                  ],
+                  label: ''
+               }],
+               labels: [
+                  'Failed',
+                  'Passed',                  
+               ]
+            },
+            options: {               
+               responsive: true,
+               maintainAspectRatio: false,
+               legend: {
+                  display: "bottom"
+               },
+               title: {
+                  display: true,
+                  text: 'Chart.js Doughnut Chart'
+               },
+            }
+         };
+
+         var l;
+         function getPieChartConfig(date,release){
+            var tmp_config = config;
+            var total_passed = 0; var total_failed = 0;
+            tmp_config.data.datasets[0].label = "Date: "+date+ " Release: "+release;
+            tmp_config.options.title.text = "Date: "+date+ " Release: "+release;
+
+            for(var tc in data[release]["tc"]){
+               console.log(release,tc,date);
+               if(typeof data[release]["tc"][tc][date] != "undefined"){
+                  if(typeof data[release]["tc"][tc][date]["p"] != "undefined" && data[release]["tc"][tc][date]["p"].length > 0)
+                     total_passed += parseInt(data[release]["tc"][tc][date]["p"]);
+                  if(typeof data[release]["tc"][tc][date]["f"] != "undefined" && data[release]["tc"][tc][date]["f"].length > 0)
+                     total_failed += parseInt(data[release]["tc"][tc][date]["f"]);
+               }              
+            }  
+
+            var total_testcases = total_failed+total_passed
+            tmp_config.data.datasets[0].data = [Math.round((total_failed*100)/total_testcases),Math.round((total_passed*100)/total_testcases)];
+            console.log(tmp_config,total_failed,total_passed);
+            return tmp_config;
+         }
+
+         function getDates(){
+            var tc_dates = [];
+            for(var r in data){
+               for( var i = 0;i < data[r]["tc_dates"].length; i++){                  
+                  if(tc_dates.indexOf(data[r]["tc_dates"][i]) === -1){
+                     tc_dates.push(data[r]["tc_dates"][i]);
+                  }
+               }
+            }
+            return tc_dates;
+         }
+         
+         function getColumnForRelease(release){            
+            var columns = [{
+               text: '<b>#</b>',
+               width: 30,
+               sortable: false,
+               locked   : true,
+               dataIndex: 'id',               
+            },{
+               text: '<b>Test Cases</b>',
+               width: 200,
+               locked   : true,
+               sortable: false,
+               dataIndex: 'testcases',
+            }];            
+            for (var d in data[release]["tc_dates"]){
+               var date = data[release]["tc_dates"][d].split("-")[1]+"-"+data[release]["tc_dates"][d].split("-")[2]
+               columns.push({
+                  text: '<b>'+date+'</b>',
+                  width: 50,         
+                  sortable: false,         
+                  dataIndex: 'date-'+data[release]["tc_dates"][d],
+                  listeners: {
+                     headerclick:function(header, column, e, t,eOpts){
+                        // header:Header Container of grid
+                        // column: The Column header Component
+                        console.log(column.initialConfig.dataIndex,active_release);
+                        
+                        
+                        if (!detailEl) {
+                           var bd = Ext.getCmp('details-panel').body;
+                           bd.update('').setStyle('background','#fff');
+                           detailEl = bd.createChild(); //create default empty div                           
+                        }
+
+                        detailEl.hide().update('<canvas id="chart" width="100%" height="300px" ></canvas>').slideIn('l', {stopAnimation:true,duration: 200});
+                        var ctx = document.getElementById('chart').getContext('2d');
+			               window.myPie = new Chart(ctx, getPieChartConfig(column.initialConfig.dataIndex.replace("date-",""),active_release));
+                     }
+                  }
+               });
+            }
+            return columns;
+         }
+         
+
+         function getColumnsForTestCaseFilter(tc){
+            var columns = [{
+               text: '<b>#</b>',
+               width: 30,
+               sortable: false,
+               locked   : true,
+               dataIndex: 'id',               
+            },{
+               text: '<b>Release</b>',
+               width: 200,
+               locked   : true,
+               sortable: false,
+               dataIndex: 'releases',
+            }];
+
+            var tc_dates = getDates().sort();         
+            
+            for (var i = 0 ; i<tc_dates.length;i++){               
+               var date = tc_dates[i].split("-")[1]+"-"+tc_dates[i].split("-")[2]
+               columns.push({
+                  text: '<b>'+date+'</b>',
+                  width: 50,         
+                  sortable: false,         
+                  dataIndex: 'date-'+tc_dates[i],
+                  /*
+                  listeners: {
+                     headerclick:function(header, column, e, t,eOpts){
+                        // header:Header Container of grid
+                        // column: The Column header Component
+                        console.log(column.initialConfig.dataIndex,active_release);
+                        
+                        
+                        if (!detailEl) {
+                           var bd = Ext.getCmp('details-panel').body;
+                           bd.update('').setStyle('background','#fff');
+                           detailEl = bd.createChild(); //create default empty div                           
+                        }
+
+                        detailEl.hide().update('<canvas id="chart" ></canvas>').slideIn('l', {stopAnimation:true,duration: 200});
+                        var ctx = document.getElementById('chart').getContext('2d');
+                        window.myPie = new Chart(ctx, config);
+                     }
+                  }
+                  */
+               });
+            }
+            
+            return columns;
+         }
+         
+         
+         function getGridForRelease(release){
+            var gridData = [];
+            var index = 1;
+            for(var tc in data[release]["tc"]){               
+               var temp = {};
+               temp["id"] = index++;
+               temp["testcases"] = tc;
+               for(var d in data[release]["tc"][tc]){                  
+                  var p = parseInt(data[release]["tc"][tc][d].p);
+                  var ttc = parseInt(data[release]["tc"][tc][d].t);
+                  var status = "";
+                  if(data[release]["tc"][tc][d].s === "ABORTED") {
+                      status = '<span class="ico-aborted" ></span>';
+                  }
+                  else {
+                      if(((p/ttc) * 100) > 50) {
+
+                          status = '<span class="ico-failed-50" ></span>';
+                      }
+                      else
+                      {
+                          status = '<span class="ico-failed" ></span>';
+                      }
+                      if(p === ttc) {
+                          status = '<span class="ico-passed" ></span>';
+                      }
+                      if(data[release]["tc"][tc][d].r === "INIT_FAIL") {
+                          status = '<span class="ico-initfail" ></span>';
+                      }
+                  }
+                  temp["date-"+d] = status;
+               }
+               gridData.push(temp);               
+            }            
+
+            var gridstore = Ext.create('Ext.data.Store', {
+               data:gridData
+            });
+            return Ext.create('Ext.grid.Panel', {                              
+               width: 500,
+               height: 330,
+               frame: false,
+               id:'grid-'+release,
+               title: 'Status for Release '+release,               
+               iconCls: 'icon-user',
+               columns: getColumnForRelease(release),
+               store:gridstore,
+               listeners: {
+                  'cellclick': function(iView,iCellEl, iColIdx, iStore, iRowEl, iRowIdx) {                     
+                     if(active_release.length == 0){
+                        active_release = Ext.getCmp('content-panel').layout.getActiveItem().id.replace("grid-","");
+                     }
+                     var zRec = iView.getRecord(iRowEl);    
+                     tcase = zRec.data.testcases;
+                     date = iView.getGridColumns()[iColIdx].dataIndex.replace("date-",""); 
+
+                     html = '<p class="details-info"><b style="color:red" >Data Not Available.<b></p>';
+                     if (!detailEl) {
+                           var bd = Ext.getCmp('details-panel').body;
+                           bd.update('').setStyle('background','#fff');
+                           detailEl = bd.createChild(); //create default empty div                           
+                     } 
+                     if(data[active_release]["tc"][tcase][date] != undefined){
+                        tdata = data[active_release]["tc"][tcase][date];
+                        console.log(tdata);                                              
+                        html = '<p class="details-info" style="line-height:30px;" ><b>Submission ID:</b> '+tdata.sid+'<br /><b>Test Case:</b> '+tcase+'<br /><b>Date:</b> '+date+'<br /> <b>Total Testcase:</b> '+tdata.t+'<br /> <b>Passed: </b> '+tdata.p+'<br /><b>Failed:</b> '+tdata.f+' <br /><b>Result:</b> '+tdata.r+'<br /><b>Status:</b> '+tdata.s+' </p>'
+                     }
+                     
+
+                     detailEl.hide().update(html).slideIn('l', {stopAnimation:true,duration: 200});
+                  },
+                  'celldblclick':function(iView,iCellEl, iColIdx, iStore, iRowEl, iRowIdx) {          
+                     if(active_release.length == 0){
+                        active_release = Ext.getCmp('content-panel').layout.getActiveItem().id.replace("grid-","");
+                     }
+                     var zRec = iView.getRecord(iRowEl);    
+                     tcase = zRec.data.testcases;
+                     date = iView.getGridColumns()[iColIdx].dataIndex.replace("date-","");                      
+                      
+                     if(data[active_release]["tc"][tcase][date] != undefined){
+                        tdata = data[active_release]["tc"][tcase][date];
+                        window.open("https://inception.juniper.net/fusion/v2/#script_exec_id="+tdata.id+"-cos_weight.robot");
+                     }
+                  }
+               },
+            });
+         }
+
+
+         function getGridForTestCase(tc){
+            var gridData = [];
+            var index = 1;
+            for(var release in data){               
+               var temp = {};
+               temp["id"] = index++;
+               temp["releases"] = release;
+               for(var d in data[release]["tc"][tc]){                  
+                  var p = parseInt(data[release]["tc"][tc][d].p);
+                  var ttc = parseInt(data[release]["tc"][tc][d].t);
+                  var status = "";
+                  if(data[release]["tc"][tc][d].s === "ABORTED") {
+                      status = '<span class="ico-aborted" ></span>';
+                  }
+                  else {
+                      if(((p/ttc) * 100) > 50) {
+
+                          status = '<span class="ico-failed-50" ></span>';
+                      }
+                      else
+                      {
+                          status = '<span class="ico-failed" ></span>';
+                      }
+                      if(p === ttc) {
+                          status = '<span class="ico-passed" ></span>';
+                      }
+                      if(data[release]["tc"][tc][d].r === "INIT_FAIL") {
+                          status = '<span class="ico-initfail" ></span>';
+                      }
+                  }
+                  temp["date-"+d] = status;
+               }
+               gridData.push(temp);               
+            }            
+
+            var gridstore = Ext.create('Ext.data.Store', {
+               data:gridData
+            });
+            return Ext.create('Ext.grid.Panel', {                              
+               width: 500,
+               height: 330,
+               frame: false,
+               id:'tc_data_'+tc,
+               title: 'Status for Test Case '+tc,               
+               iconCls: 'icon-user',
+               columns: getColumnsForTestCaseFilter(tc),
+               store:gridstore,
+               listeners: {
+                  'cellclick': function(iView,iCellEl, iColIdx, iStore, iRowEl, iRowIdx) {                     
+                     if(active_release.length == 0){
+                        active_release = Ext.getCmp('content-panel').layout.getActiveItem().id.replace("grid-","");
+                     }
+                     var zRec = iView.getRecord(iRowEl);    
+                     tcase = zRec.data.testcases;
+                     date = iView.getGridColumns()[iColIdx].dataIndex.replace("date-",""); 
+
+                     html = '<p class="details-info"><b style="color:red" >Data Not Available.<b></p>';
+                     if (!detailEl) {
+                           var bd = Ext.getCmp('details-panel').body;
+                           bd.update('').setStyle('background','#fff');
+                           detailEl = bd.createChild(); //create default empty div                           
+                     } 
+                     if(data[active_release]["tc"][tcase][date] != undefined){
+                        tdata = data[active_release]["tc"][tcase][date];
+                        console.log(tdata);                                              
+                        html = '<p class="details-info" style="line-height:30px;" ><b>Test Case:</b> '+tcase+'<br /><b>Date:</b> '+date+'<br /> <b>Total Testcase:</b> '+tdata.t+'<br /> <b>Passed: </b> '+tdata.p+'<br /><b>Failed:</b> '+tdata.f+' <br /><b>Result:</b> '+tdata.r+'<br /><b>Status:</b> '+tdata.s+' </p>'
+                     }
+                     
+
+                     detailEl.hide().update(html).slideIn('l', {stopAnimation:true,duration: 200});
+                  },
+                  'celldblclick':function(iView,iCellEl, iColIdx, iStore, iRowEl, iRowIdx) {          
+                     if(active_release.length == 0){
+                        active_release = Ext.getCmp('content-panel').layout.getActiveItem().id.replace("grid-","");
+                     }
+                     var zRec = iView.getRecord(iRowEl);    
+                     tcase = zRec.data.testcases;
+                     date = iView.getGridColumns()[iColIdx].dataIndex.replace("date-","");                      
+                      
+                     if(data[active_release]["tc"][tcase][date] != undefined){
+                        tdata = data[active_release]["tc"][tcase][date];
+                        window.open("https://inception.juniper.net/fusion/v2/#script_exec_id="+tdata.id+"-cos_weight.robot");
+                     }
+                  }
+               },
+            });
+         }
+
+         function getTestCaseDataForComboBox(){
+            var d = [];
+            for(var i=0; i<testcase_data.length; i++){                     
+               d.push({ name: testcase_data[i], value: testcase_data[i] });
+            }
+            return d;
+         }
+
+         function loadExtJs() {
+            Ext.onReady(function() {
+               Ext.tip.QuickTipManager.init();      
+               // This is the main content center region that will contain each example layout panel.
+               // It will be implemented as a CardLayout since it will contain multiple panels with
+               // only one being visible at any given time.
+
+               function getContentItems(){
+                  var contents = [];
+                  for (var builds in data){
+                     contents.push(getGridForRelease(builds));
+                  }                  
+
+                  for(var i=0; i<testcase_data.length; i++){
+                     contents.push(getGridForTestCase(testcase_data[i]));
+                  }
+
+                  return contents;
+               }
+
+               
+
+               var contentPanel = {
+                  id: 'content-panel',
+                  region: 'center', // this is what makes this panel into a region within the containing layout
+                  layout: 'card',
+                  margins: '2 5 5 0',
+                  activeItem: 0,
+                  border: false,
+                  items: getContentItems()                   
+               };
+               
+               var store = Ext.create('Ext.data.TreeStore', {
+                  root: {
+                     expanded: true
+                  },
+                  data: treedata
+               });
+               
+
+               // Go ahead and create the TreePanel now so that we can use it below
+               var treePanel = Ext.create('Ext.tree.Panel', {
+                  id: 'tree-panel',
+                  title: 'Release',
+                  region:'north',
+                  split: true,
+                  margin: '2 0 5 4',
+                  height: 360,
+                  minSize: 150,
+                  rootVisible: false,
+                  autoScroll: true,
+                  store: store,
+                  listeners: {
+                     itemclick: function(treeModel, record, item, index, e, eOpts){
+                        if(record.raw.parentId != 'root'){
+                           active_release = record.getId();
+                           Ext.getCmp('content-panel').layout.setActiveItem("grid-"+record.getId());
+                        }
+                     }
+                  }
+                  
+               });
+               
+               // This is the Details panel that contains the description for each example layout.
+               var detailsPanel = {
+                  id: 'details-panel',
+                  title: 'Details',
+                  region: 'center',
+                  margin: '2 0 5 4',
+                  bodyStyle: 'padding-bottom:15px;background:#eee;',
+                  autoScroll: true,
+                  html: '<p class="details-info">When you click red/green circles from the data grid, additional details will display here.</p>'
+               };
+               
+
+               
+               var comboBox = {
+                     id:"combo_t",
+                     xtype: 'combo', 
+                     fieldLabel: 'Testcase',
+                     displayField: 'name',
+                     valueField: 'value',
+                     region:'north',
+                     title: 'Filter',
+                     margin: '2 0 5 4',
+                     labelStyle: 'cursor:move;',                     
+                     queryMode: 'local',
+                     store: Ext.create('Ext.data.Store', {
+                        fields: ['value', 'name'],
+                        data : getTestCaseDataForComboBox()
+                     }),
+                     
+                     listeners: {
+                        select: function(combo) {
+                           var tc = combo.getValue();  
+                           if(tc != undefined){                                                          
+                              Ext.getCmp('content-panel').layout.setActiveItem("tc_data_"+tc);                           
+                           }
+                        }
+                     }
+               };
+               
+               
+               
+               Ext.create('Ext.Viewport', {
+                  layout: 'border',
+                  title: 'Ext Layout Browser',
+                  items: [{
+                     xtype: 'box',
+                     id: 'header',
+                     region: 'north',
+                     html: '<h1> Testcase Status Viewer</h1>',
+                     height: 30
+                  },{
+                     layout: 'border',
+                     id: 'layout-browser',
+                     region:'west',
+                     border: false,
+                     split:true,
+                     margins: '2 0 5 5',
+                     width: 275,
+                     minSize: 600,
+                     maxSize: 800,
+                     items: [treePanel,comboBox, detailsPanel]
+                  }, 
+                  contentPanel
+                  ],
+                  renderTo: 'main'
+               });
+
+               active_release = Ext.getCmp('content-panel').layout.getActiveItem().id.replace("grid-","");
+
+            });
+         }
+      </script>
+   </head>
+   
+   <body>
+      <div id="main" ></div>
+   </body>
+</html>
