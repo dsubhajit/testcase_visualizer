@@ -27,6 +27,7 @@
          var active_release = "";
          var detailEl;
          var testcase_data = [];
+         var selected_tc = "";
          var k ;
          $(document).ready(function(){
             $.ajax({
@@ -270,7 +271,8 @@
                columns: getColumnForRelease(release),
                store:gridstore,
                listeners: {
-                  'cellclick': function(iView,iCellEl, iColIdx, iStore, iRowEl, iRowIdx) {                     
+                  'cellclick': function(iView,iCellEl, iColIdx, iStore, iRowEl, iRowIdx) {    
+                                      
                      if(active_release.length == 0){
                         active_release = Ext.getCmp('content-panel').layout.getActiveItem().id.replace("grid-","");
                      }
@@ -285,9 +287,8 @@
                            detailEl = bd.createChild(); //create default empty div                           
                      } 
                      if(data[active_release]["tc"][tcase][date] != undefined){
-                        tdata = data[active_release]["tc"][tcase][date];
-                        console.log(tdata);                                              
-                        html = '<p class="details-info" style="line-height:30px;" ><b>Submission ID:</b> '+tdata.sid+'<br /><b>Test Case:</b> '+tcase+'<br /><b>Date:</b> '+date+'<br /> <b>Total Testcase:</b> '+tdata.t+'<br /> <b>Passed: </b> '+tdata.p+'<br /><b>Failed:</b> '+tdata.f+' <br /><b>Result:</b> '+tdata.r+'<br /><b>Status:</b> '+tdata.s+' </p>'
+                        tdata = data[active_release]["tc"][tcase][date];                                                                
+                        html = '<p class="details-info" style="line-height:30px;" ><b>Submission ID:</b> <a target="_blank" href="http://inception.juniper.net/fusion/v2?submission_id='+tdata.sid+'-AFT-VMX-ZT-Sanity" >'+tdata.sid+'</a><br /><b>Test Case:</b> '+tcase+'<br /><b>Date:</b> '+date+'<br /> <b>Total Testcase:</b> '+tdata.t+'<br /> <b>Passed: </b> '+tdata.p+'<br /><b>Failed:</b> '+tdata.f+' <br /><b>Result:</b> '+tdata.r+'<br /><b>Status:</b> '+tdata.s+' </p>'
                      }
                      
 
@@ -359,39 +360,33 @@
                columns: getColumnsForTestCaseFilter(tc),
                store:gridstore,
                listeners: {
-                  'cellclick': function(iView,iCellEl, iColIdx, iStore, iRowEl, iRowIdx) {                     
-                     if(active_release.length == 0){
-                        active_release = Ext.getCmp('content-panel').layout.getActiveItem().id.replace("grid-","");
-                     }
-                     var zRec = iView.getRecord(iRowEl);    
-                     tcase = zRec.data.testcases;
+                  'cellclick': function(iView,iCellEl, iColIdx, iStore, iRowEl, iRowIdx) {                                                              
+                     var selected_release = iStore.data.releases;
+                     tcase = selected_tc;
                      date = iView.getGridColumns()[iColIdx].dataIndex.replace("date-",""); 
 
                      html = '<p class="details-info"><b style="color:red" >Data Not Available.<b></p>';
                      if (!detailEl) {
-                           var bd = Ext.getCmp('details-panel').body;
-                           bd.update('').setStyle('background','#fff');
-                           detailEl = bd.createChild(); //create default empty div                           
+                        var bd = Ext.getCmp('details-panel').body;
+                        bd.update('').setStyle('background','#fff');
+                        detailEl = bd.createChild(); //create default empty div                           
                      } 
-                     if(data[active_release]["tc"][tcase][date] != undefined){
-                        tdata = data[active_release]["tc"][tcase][date];
-                        console.log(tdata);                                              
-                        html = '<p class="details-info" style="line-height:30px;" ><b>Test Case:</b> '+tcase+'<br /><b>Date:</b> '+date+'<br /> <b>Total Testcase:</b> '+tdata.t+'<br /> <b>Passed: </b> '+tdata.p+'<br /><b>Failed:</b> '+tdata.f+' <br /><b>Result:</b> '+tdata.r+'<br /><b>Status:</b> '+tdata.s+' </p>'
+                     
+                     if(typeof data[selected_release]["tc"][tcase][date] != "undefined"){
+                        tdata = data[selected_release]["tc"][tcase][date];                     
+                        html = '<p class="details-info" style="line-height:30px;" ><b>Submission ID:</b> <a target="_blank" href="http://inception.juniper.net/fusion/v2?submission_id='+tdata.sid+'-AFT-VMX-ZT-Sanity" >'+tdata.sid+'</a><br /><b>Test Case:</b> '+tcase+'<br /><b>Date:</b> '+date+'<br /> <b>Total Testcase:</b> '+tdata.t+'<br /> <b>Passed: </b> '+getIntValue(tdata.p)+'<br /><b>Failed:</b> '+getIntValue(tdata.f)+' <br /><b>Result:</b> '+tdata.r+'<br /><b>Status:</b> '+tdata.s+' </p>'
                      }
                      
 
                      detailEl.hide().update(html).slideIn('l', {stopAnimation:true,duration: 200});
                   },
                   'celldblclick':function(iView,iCellEl, iColIdx, iStore, iRowEl, iRowIdx) {          
-                     if(active_release.length == 0){
-                        active_release = Ext.getCmp('content-panel').layout.getActiveItem().id.replace("grid-","");
-                     }
-                     var zRec = iView.getRecord(iRowEl);    
-                     tcase = zRec.data.testcases;
+                     var selected_release = iStore.data.releases;
+                     tcase = selected_tc;
                      date = iView.getGridColumns()[iColIdx].dataIndex.replace("date-","");                      
                       
-                     if(data[active_release]["tc"][tcase][date] != undefined){
-                        tdata = data[active_release]["tc"][tcase][date];
+                     if(data[selected_release]["tc"][tcase][date] != undefined){
+                        tdata = data[selected_release]["tc"][tcase][date];
                         window.open("https://inception.juniper.net/fusion/v2/#script_exec_id="+tdata.id+"-cos_weight.robot");
                      }
                   }
@@ -503,7 +498,8 @@
                         select: function(combo) {
                            var tc = combo.getValue();  
                            if(tc != undefined){                                                          
-                              Ext.getCmp('content-panel').layout.setActiveItem("tc_data_"+tc);                           
+                              Ext.getCmp('content-panel').layout.setActiveItem("tc_data_"+tc);     
+                              selected_tc =  tc;                      
                            }
                         }
                      }
@@ -541,10 +537,17 @@
 
             });
          }
+
+         function getIntValue(val){
+            console.log(val);
+            var intval = parseInt(val);
+            return isNaN(intval)?0:intval;
+         }
+
       </script>
    </head>
    
    <body>
-      <div id="main" ></div>
+      <div id="main" > <div style="margin:0 auto; margin-top: 25%;width: 100%;text-align: center" >Please wait ...</div></div>
    </body>
 </html>
